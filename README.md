@@ -77,13 +77,13 @@ pip install -r requirements.txt
 From the project folder:
 
 ```bash
-python3 VIRTUALDJ_LYRICS_IA_FIX_v4_1.py
+python3 VIRTUALDJ_LYRICS_IA_FIX.py
 ```
 
 On Windows, depending on your Python installation:
 
 ```bash
-python VIRTUALDJ_LYRICS_IA_FIX_v4_1.py
+python VIRTUALDJ_LYRICS_IA_FIX.py
 ```
 
 The browser should open automatically.
