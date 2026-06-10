@@ -1,3 +1,7 @@
+Release v4.5
+Stable screen-aware alignment
+
+
 # VIRTUALDJ IA LYRICS FIX
 
 A local web-based tool for correcting and realigning synchronized lyrics stored in VirtualDJ's `extra.db`.
