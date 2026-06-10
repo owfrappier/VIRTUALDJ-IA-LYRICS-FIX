@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS AI FIX - V4.1
+VIRTUALDJ LYRICS AI FIX - V4.5
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v4_1.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v4_5.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -85,7 +85,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS AI FIX V4.1\n"
+            "VIRTUALDJ LYRICS AI FIX V4.5\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -361,6 +361,41 @@ def words_from_plain_text(text):
     return re.findall(r"\S+", text)
 
 
+def words_and_line_end_flags_from_text(text):
+    """
+    Return:
+    - words: flat list of words
+    - line_end_flags: same length list, True when the word is the last word
+      of a corrected-text line.
+
+    This lets the screen/page separator logic avoid cutting a karaoke phrase
+    in the middle of a user-provided corrected lyric line.
+
+    Example corrected lines:
+        Y courent partout
+        Toujours et encore
+
+    The preferred screen breaks become:
+        after "partout"
+        after "encore"
+    and NOT after "Toujours".
+    """
+    text = clean_text_for_injection(text)
+    words = []
+    flags = []
+
+    for line in text.splitlines():
+        line_words = re.findall(r"\S+", line.strip())
+        if not line_words:
+            continue
+
+        for i, word in enumerate(line_words):
+            words.append(word)
+            flags.append(i == len(line_words) - 1)
+
+    return words, flags
+
+
 def text_similarity(a, b):
     return SequenceMatcher(None, normalize(a), normalize(b)).ratio()
 
@@ -471,19 +506,25 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            prev_i = i1 - 1
-            next_i = i1
+            # V4.5 simple rule:
+            # Added words stay on the same screen as the nearest similar/matched word.
+            #
+            # If words are inserted BEFORE an existing matched word, attach all of them
+            # to the NEXT old index. This prevents cases like:
+            #     "Y courent partout / Toujours et encore"
+            # from putting "Toujours" alone on the previous screen.
+            #
+            # If insertion is at the end, attach to the previous old index.
+            if i1 < len(old_items):
+                oi = i1          # inserted before this existing word
+            else:
+                oi = len(old_items) - 1  # inserted after the last existing word
+
             for offset, word in enumerate(new_chunk):
-                if i1 <= 0:
-                    oi = 0
-                elif i1 >= len(old_items):
-                    oi = len(old_items) - 1
-                else:
-                    oi = prev_i if offset < new_count / 2 else next_i
                 mapped.append({
                     "prefix": prefix_at_old_index(oi),
                     "word": word,
-                    "source": "inserted_clone",
+                    "source": "inserted_same_screen",
                     "old_index": oi,
                     "new_index": j1 + offset,
                 })
@@ -495,6 +536,17 @@ def map_new_words_to_original_prefixes(old_items, new_words):
 
 
 def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
+    """
+    Rebuild the XML while preserving VirtualDJ screen/page separators.
+
+    V4.5 simple screen rule:
+    - Do not move screen separators using punctuation, uppercase letters, or corrected-line endings.
+    - Preserve the original screen separators attached to their original old word index.
+    - Added words inherit the old_index of the nearest matched/similar word.
+    - Therefore, added words before or after a similar word stay on the same VirtualDJ screen as that word.
+
+    This is intentionally simpler and safer than trying to guess phrase boundaries.
+    """
     lines = (original_xml or "").splitlines()
     timed_indices = [item["line_index"] for item in old_items]
 
@@ -509,25 +561,30 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     before = lines[:first]
     after = lines[last + 1:]
 
-    separators_after = {i: [] for i in range(len(old_items))}
+    # Store original internal separators after each old timed word.
+    separators_after_old = {i: [] for i in range(len(old_items))}
+
     for old_i in range(len(old_items) - 1):
         a = old_items[old_i]["line_index"]
         b = old_items[old_i + 1]["line_index"]
         if b > a + 1:
-            separators_after[old_i].extend(lines[a + 1:b])
+            separators_after_old[old_i].extend(lines[a + 1:b])
 
     output = []
+
     for pos, item in enumerate(mapped_items):
         word = re.sub(r"^\[[^\]]+\]\s*", "", item["word"]).strip()
         output.append(item["prefix"] + word)
 
         current_old = item.get("old_index")
         next_old = mapped_items[pos + 1].get("old_index") if pos + 1 < len(mapped_items) else None
+
+        # Add original screen separator only after the LAST new word attached
+        # to this old index. This keeps inserted words on the same screen.
         if current_old is not None and current_old != next_old:
-            output.extend(separators_after.get(current_old, []))
+            output.extend(separators_after_old.get(current_old, []))
 
     return "\n".join(before + output + after)
-
 
 def write_lyrics_to_db(lid_hex, new_xml):
     db = get_db_path()
@@ -535,7 +592,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v41-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v45-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -614,7 +671,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS AI FIX V4.1", f"""
+    return page("VIRTUALDJ LYRICS AI FIX V4.5", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -721,8 +778,12 @@ def corrected():
     if request.method == "POST":
         clean = request.form.get("clean_text", "")
         old_items = extract_timed_lines_from_vdj_xml(selected["xml"])
-        new_words = words_from_plain_text(clean)
+        new_words, line_end_flags = words_and_line_end_flags_from_text(clean)
         mapped = map_new_words_to_original_prefixes(old_items, new_words)
+
+        for i, item in enumerate(mapped):
+            item["line_end"] = line_end_flags[i] if i < len(line_end_flags) else False
+
         STATE["old_items"] = old_items
         STATE["new_words"] = new_words
         STATE["mapped_items"] = mapped
@@ -805,7 +866,7 @@ def preview():
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp is generated or reformatted. Internal VirtualDJ separators are preserved.</p>
+<p class="small">No timestamp is generated or reformatted. Added words stay on the same VirtualDJ screen as the nearest matched word.</p>
 </div>
 
 <div class="card">
