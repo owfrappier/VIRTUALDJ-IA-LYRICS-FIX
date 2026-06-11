@@ -1,3 +1,13 @@
+
+v5.3
+
+- Added Robust Alignment mode for difficult lyrics
+- Smart Alignment remains the default mode
+- Improved preservation of original karaoke timing
+- Automatic extra.db backup
+- Windows and macOS support
+
+
 Release v4.5
 Stable screen-aware alignment
 
