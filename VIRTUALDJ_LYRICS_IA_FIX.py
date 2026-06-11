@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V5.9-IA-HARD-LINE-SAFE-PASS
+VIRTUALDJ LYRICS IA FIX - V6.0-IA-GAP-EXTEND-PASS
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v5_9_ia_hard_line_safe_pass.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_0_ia_gap_extend_pass.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -86,7 +86,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V5.9-IA-HARD-LINE-SAFE-PASS\n"
+            "VIRTUALDJ LYRICS IA FIX V6.0-IA-GAP-EXTEND-PASS\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -525,7 +525,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V5.9-IA-HARD-LINE-SAFE-PASS simple rule:
+            # V6.0-IA-GAP-EXTEND-PASS simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -627,13 +627,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V5.9-IA-HARD-LINE-SAFE-PASS.
+    Hard experimental lyrics distribution V6.0-IA-GAP-EXTEND-PASS.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V5.9-IA-HARD-LINE-SAFE-PASS distributes corrected WORDS across screen blocks proportionally to the
+    V6.0-IA-GAP-EXTEND-PASS distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -728,7 +728,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V5.9-IA-HARD-LINE-SAFE-PASS:
+    V6.0-IA-GAP-EXTEND-PASS:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -782,7 +782,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V5.9-IA-HARD-LINE-SAFE-PASS.
+    Works on chunks, not raw words, in V6.0-IA-GAP-EXTEND-PASS.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -803,7 +803,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V5.9-IA-HARD-LINE-SAFE-PASS. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V6.0-IA-GAP-EXTEND-PASS. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -950,7 +950,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V5.9-IA-HARD-LINE-SAFE-PASS.
+    Hard experimental lyrics mode V6.0-IA-GAP-EXTEND-PASS.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1092,10 +1092,18 @@ def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     return mapped
 
 def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items):
+    # Hard final visual gap pass.
+    mapped_items = extend_long_gaps_final_pass(
+        mapped_items,
+        min_gap=2.0,
+        ratio=2.0/3.0,
+        max_extension=4.0
+    )
+
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V5.9-IA-HARD-LINE-SAFE-PASS fix:
+    V6.0-IA-GAP-EXTEND-PASS fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1249,6 +1257,92 @@ def fix_zero_duration_chunks_inside_same_line(mapped_items, min_duration=0.05):
 
 
 
+
+# --- V6.0 IA GAP EXTEND PASS ---
+
+def parse_vdj_prefix_range_gap(prefix):
+    m = re.match(r"^(\[)([0-9]+(?:[.,][0-9]+)?)-([0-9]+(?:[.,][0-9]+)?)(\])(\s*)", prefix or "")
+    if not m:
+        return None
+
+    start_s = m.group(2)
+    end_s = m.group(3)
+
+    def to_float(x):
+        return float(x.replace(",", "."))
+
+    decimals = max(
+        len(start_s.split(".")[-1]) if "." in start_s else (len(start_s.split(",")[-1]) if "," in start_s else 0),
+        len(end_s.split(".")[-1]) if "." in end_s else (len(end_s.split(",")[-1]) if "," in end_s else 0),
+    )
+
+    return {
+        "start": to_float(start_s),
+        "end": to_float(end_s),
+        "comma": "," in start_s or "," in end_s,
+        "decimals": decimals,
+        "spacing": m.group(5) or " ",
+    }
+
+
+def format_vdj_number_gap(value, info):
+    s = f"{float(value):.{info.get('decimals', 2)}f}"
+    if info.get("comma"):
+        s = s.replace(".", ",")
+    return s
+
+
+def make_vdj_prefix_gap(start_value, end_value, info):
+    return "[" + format_vdj_number_gap(start_value, info) + "-" + format_vdj_number_gap(end_value, info) + "]" + info.get("spacing", " ")
+
+
+def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=2.0/3.0, max_extension=4.0):
+    """
+    Final visual transition pass.
+
+    Only the END timestamp of the current chunk is extended.
+    The next chunk start is never moved.
+    Text is never changed.
+
+    Example:
+        [64.02-64.26] di purezza
+        [68.00-68.20] Ghjuvellu
+
+    becomes approximately:
+        [64.02-66.75] di purezza
+        [68.00-68.20] Ghjuvellu
+    """
+    if not mapped_items:
+        return mapped_items
+
+    items = [dict(item) for item in mapped_items]
+
+    for i in range(len(items) - 1):
+        cur = parse_vdj_prefix_range_gap(items[i].get("prefix", ""))
+        nxt = parse_vdj_prefix_range_gap(items[i + 1].get("prefix", ""))
+
+        if not cur or not nxt:
+            continue
+
+        gap = nxt["start"] - cur["end"]
+        if gap < min_gap:
+            continue
+
+        extension = min(gap * ratio, max_extension)
+        new_end = cur["end"] + extension
+
+        if new_end >= nxt["start"]:
+            new_end = nxt["start"] - 0.02
+
+        if new_end <= cur["end"]:
+            continue
+
+        items[i]["prefix"] = make_vdj_prefix_gap(cur["start"], new_end, cur)
+        items[i]["source"] = str(items[i].get("source", "")) + "_gap_extend"
+
+    return items
+
+
 def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     Rebuild the XML while preserving VirtualDJ screen/page separators.
@@ -1266,6 +1360,14 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     if any("screen_index" in item for item in mapped_items):
         return rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items)
+
+    # Smart final visual gap pass.
+    mapped_items = extend_long_gaps_final_pass(
+        mapped_items,
+        min_gap=2.0,
+        ratio=2.0/3.0,
+        max_extension=4.0
+    )
 
     lines = (original_xml or "").splitlines()
     timed_indices = [item["line_index"] for item in old_items]
@@ -1309,7 +1411,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v59iahlsafe-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v60iagap-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1388,7 +1490,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V5.9-IA-HARD-LINE-SAFE-PASS", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V6.0-IA-GAP-EXTEND-PASS", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1617,7 +1719,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. Long visual gaps are extended by 2/3 on the previous chunk. The final XML preview below is the exact database output. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine, adds a safe local line pass, then the final gap extension pass.</p>
 </div>
 
 <div class="card">
