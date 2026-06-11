@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 
-=======
->>>>>>> 71029e1a1cdf06dae505fa855d5d95938e71f191
 v5.3
 
 - Added Robust Alignment mode for difficult lyrics
