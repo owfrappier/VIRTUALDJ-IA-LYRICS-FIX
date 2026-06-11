@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS AI FIX - V5.3
+VIRTUALDJ LYRICS IA FIX - V5.6-IA-ZERO-DURATION-HARD-FIX
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v5_3.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v5_6_ia_zero_duration_hard_fix.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -86,7 +86,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS AI FIX V5.3\n"
+            "VIRTUALDJ LYRICS IA FIX V5.6-IA-ZERO-DURATION-HARD-FIX\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -362,6 +362,22 @@ def words_from_plain_text(text):
     return re.findall(r"\S+", text)
 
 
+
+def words_and_line_ids_from_text(text):
+    text = clean_text_for_injection(text)
+    words = []
+    line_ids = []
+    line_id = 0
+    for raw_line in text.splitlines():
+        line_words = re.findall(r"\S+", raw_line.strip())
+        if not line_words:
+            continue
+        for word in line_words:
+            words.append(word)
+            line_ids.append(line_id)
+        line_id += 1
+    return words, line_ids
+
 def words_and_line_end_flags_from_text(text):
     """
     Return:
@@ -507,7 +523,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V5.3 simple rule:
+            # V5.6-IA-ZERO-DURATION-HARD-FIX simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -542,6 +558,8 @@ def split_old_items_into_screen_blocks(original_xml, old_items):
     A block break is detected when non-timestamp separator lines exist between
     two timestamped lyric lines.
     """
+    mapped_items = fix_zero_duration_chunks_inside_same_line(mapped_items, min_duration=0.05)
+
     lines = (original_xml or "").splitlines()
 
     if not old_items:
@@ -573,7 +591,7 @@ def corrected_lines_as_word_groups(clean_text):
     Keep corrected pasted line breaks as phrase groups.
 
     Useful when the original text is too wrong for word-level matching, such as
-    heavily distorted AI recognition or minority languages.
+    heavily distorted IA recognition or minority languages.
     """
     text = clean_text_for_injection(clean_text)
     groups = []
@@ -593,13 +611,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Difficult lyrics distribution V5.3.
+    Hard experimental lyrics distribution V5.6-IA-ZERO-DURATION-HARD-FIX.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V5.3 distributes corrected WORDS across screen blocks proportionally to the
+    V5.6-IA-ZERO-DURATION-HARD-FIX distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -694,8 +712,8 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V5.3:
-    In difficult mode, do not write very small connector words alone.
+    V5.6-IA-ZERO-DURATION-HARD-FIX:
+    In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
         è, di, u, ci, ne, la, ...
@@ -748,7 +766,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V5.3.
+    Works on chunks, not raw words, in V5.6-IA-ZERO-DURATION-HARD-FIX.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -769,7 +787,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V5.3. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V5.6-IA-ZERO-DURATION-HARD-FIX. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -833,7 +851,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Difficult lyrics mode V5.3.
+    Hard experimental lyrics mode V5.6-IA-ZERO-DURATION-HARD-FIX.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -978,15 +996,15 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V5.3 fix:
-    In difficult mode, do NOT reuse original internal separator lines at all.
+    V5.6-IA-ZERO-DURATION-HARD-FIX fix:
+    In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
     Some VirtualDJ separator lines can behave like screen-clear/page-clear markers.
     When reused at the wrong moment after heavy text correction, they may create
     black/empty karaoke screens.
 
-    Safer strategy for difficult lyrics:
+    Safer strategy for hard experimental lyrics:
     - keep header/footer XML lines around the timed block;
     - write only timestamped lyric lines;
     - keep all corrected words;
@@ -1015,6 +1033,123 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
 
     return "\n".join(before + new_timed_lines + after)
 
+def parse_vdj_prefix_range_zdf(prefix):
+    m = re.match(r"^(\[)([0-9]+(?:[.,][0-9]+)?)-([0-9]+(?:[.,][0-9]+)?)(\])(\s*)", prefix or "")
+    if not m:
+        return None
+    start_s = m.group(2)
+    end_s = m.group(3)
+
+    def to_float(x):
+        return float(x.replace(",", "."))
+
+    decimals = max(
+        len(start_s.split(".")[-1]) if "." in start_s else (len(start_s.split(",")[-1]) if "," in start_s else 0),
+        len(end_s.split(".")[-1]) if "." in end_s else (len(end_s.split(",")[-1]) if "," in end_s else 0),
+    )
+    return {
+        "start": to_float(start_s),
+        "end": to_float(end_s),
+        "comma": "," in start_s or "," in end_s,
+        "decimals": decimals,
+        "spacing": m.group(5) or " ",
+    }
+
+
+def format_vdj_number_zdf(value, info):
+    s = f"{float(value):.{info.get('decimals', 2)}f}"
+    if info.get("comma"):
+        s = s.replace(".", ",")
+    return s
+
+
+def make_vdj_prefix_zdf(start_value, end_value, info):
+    return "[" + format_vdj_number_zdf(start_value, info) + "-" + format_vdj_number_zdf(end_value, info) + "]" + info.get("spacing", " ")
+
+
+def fix_zero_duration_chunks_inside_same_line(mapped_items, min_duration=0.05):
+    """
+    V5.6 IA ZERO-DURATION HARD FIX
+
+    Very targeted but stronger repair.
+
+    Real bad output found:
+        [102.76-104.60] sola
+        [110.25-110.25] è cara
+        [110.25-111.02] Corsica
+
+    The middle chunk has zero duration and starts exactly at the same time as
+    the next word. VirtualDJ then treats it as belonging to the next visual
+    window.
+
+    Fix:
+    - If current chunk duration is zero/tiny;
+    - and next chunk starts at the same timestamp;
+    - and previous chunk has a real duration;
+    - split the previous chunk time range between previous and current.
+    - Do NOT move the next chunk.
+
+    This is intentionally not a global smoothing algorithm.
+    """
+    if not mapped_items:
+        return mapped_items
+
+    items = [dict(item) for item in mapped_items]
+    i = 1
+
+    while i < len(items) - 1:
+        prev = parse_vdj_prefix_range_zdf(items[i - 1].get("prefix", ""))
+        cur = parse_vdj_prefix_range_zdf(items[i].get("prefix", ""))
+        nxt = parse_vdj_prefix_range_zdf(items[i + 1].get("prefix", ""))
+
+        if not prev or not cur or not nxt:
+            i += 1
+            continue
+
+        prev_duration = prev["end"] - prev["start"]
+        cur_duration = cur["end"] - cur["start"]
+
+        current_starts_with_next = abs(cur["start"] - nxt["start"]) < 0.0001
+        current_is_tiny = cur_duration <= min_duration
+        previous_is_real = prev_duration > 0.10
+
+        if current_is_tiny and current_starts_with_next and previous_is_real:
+            # Split previous range between previous word/chunk and current
+            # zero-duration chunk.
+            # This keeps current visually attached to the previous phrase,
+            # while the next word keeps its real timestamp.
+            start = prev["start"]
+            end = prev["end"]
+
+            # Use weight by visible length, so "sola" and "è cara" split a bit
+            # more naturally than a strict 50/50 when needed.
+            prev_len = max(1, len(re.sub(r"\s+", "", items[i - 1].get("word", ""))))
+            cur_len = max(1, len(re.sub(r"\s+", "", items[i].get("word", ""))))
+            total = prev_len + cur_len
+
+            mid = start + (end - start) * (prev_len / total)
+
+            # Safety
+            if mid <= start:
+                mid = start + (end - start) / 2.0
+            if mid >= end:
+                mid = start + (end - start) / 2.0
+
+            items[i - 1]["prefix"] = make_vdj_prefix_zdf(start, mid, prev)
+            items[i]["prefix"] = make_vdj_prefix_zdf(mid, end, cur)
+
+            items[i - 1]["source"] = str(items[i - 1].get("source", "")) + "_zero_hard_fix"
+            items[i]["source"] = str(items[i].get("source", "")) + "_zero_hard_fix"
+
+            i += 1
+            continue
+
+        i += 1
+
+    return items
+
+
+
 def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     Rebuild the XML while preserving VirtualDJ screen/page separators.
@@ -1024,7 +1159,7 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     - added words inherit the old_index of the nearest matched/similar word;
     - added words stay on the same VirtualDJ screen as that word.
 
-    Difficult lyrics mode:
+    Hard experimental lyrics mode:
     - mapped items contain screen_index;
     - screens are rebuilt by screen_index;
     - separators are inserted only between non-empty screens;
@@ -1075,7 +1210,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v53-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v56iazhf-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1154,7 +1289,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS AI FIX V5.3", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V5.6-IA-ZERO-DURATION-HARD-FIX", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1262,12 +1397,15 @@ def corrected():
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
         old_items = extract_timed_lines_from_vdj_xml(selected["xml"])
-        new_words = words_from_plain_text(clean)
+        new_words, line_ids = words_and_line_ids_from_text(clean)
 
         if alignment_mode == "screen":
             mapped = map_corrected_text_by_screen_blocks(selected["xml"], old_items, clean)
         else:
             mapped = map_new_words_to_original_prefixes(old_items, new_words)
+
+        for i, item in enumerate(mapped):
+            item["corrected_line_id"] = line_ids[i] if i < len(line_ids) else None
 
         STATE["old_items"] = old_items
         STATE["new_words"] = new_words
@@ -1284,16 +1422,16 @@ def corrected():
 <h3>Alignment mode</h3>
 <label>
 <input type="radio" name="alignment_mode" value="smart" checked>
-Smart word mode — best for normal cases
+Smart mode — recommended for most songs
 </label>
 <br>
 <label>
 <input type="radio" name="alignment_mode" value="screen">
-Difficult lyrics mode — locked anchors + connector grouping
+Hard / experimental mode — only for heavily corrupted lyrics
 </label>
 <p class="small">
-Use difficult lyrics mode when the original text is extremely wrong and word matching or screen distribution creates large offsets
-(for example Corsican or heavily distorted AI recognition).
+Use hard experimental lyrics mode when the original text is extremely wrong and word matching or screen distribution creates large offsets
+(for example Corsican or heavily distorted IA recognition).
 </p>
 <br>
 <input type="submit" value="Preview alignment">
@@ -1368,7 +1506,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp is generated or reformatted. Smart mode keeps added words near matched words. Difficult lyrics mode locks anchors, groups tiny connector words with neighbours, and removes internal clear-screen separators.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks that collide with the next word timestamp are repaired locally. Smart mode keeps added words near matched words. Hard experimental lyrics mode locks anchors, groups tiny connector words with neighbours, and removes internal clear-screen separators.</p>
 </div>
 
 <div class="card">
