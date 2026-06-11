@@ -1,3 +1,10 @@
+V5.6 – Zero-duration chunk fix
+
+- Fixed corrected lyric chunks receiving zero duration.
+- Prevents words from collapsing into the next lyric block.
+- Preserves original timing structure.
+- No global timing smoothing.
+- Improved results on heavily corrupted AI-generated lyrics.
 
 v5.3
 
