@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V5.6-IA-ZERO-DURATION-HARD-FIX
+VIRTUALDJ LYRICS IA FIX - V5.9-IA-HARD-LINE-SAFE-PASS
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v5_6_ia_zero_duration_hard_fix.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v5_9_ia_hard_line_safe_pass.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -86,7 +86,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V5.6-IA-ZERO-DURATION-HARD-FIX\n"
+            "VIRTUALDJ LYRICS IA FIX V5.9-IA-HARD-LINE-SAFE-PASS\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -481,10 +481,12 @@ def map_new_words_to_original_prefixes(old_items, new_words):
         if tag == "equal":
             for offset, word in enumerate(new_chunk):
                 oi = i1 + offset
+                old_word = old_words[oi] if 0 <= oi < len(old_words) else ""
+                source = "kept" if old_word == word else "matched_corrected"
                 mapped.append({
                     "prefix": prefix_at_old_index(oi),
                     "word": word,
-                    "source": "kept",
+                    "source": source,
                     "old_index": oi,
                     "new_index": j1 + offset,
                 })
@@ -523,7 +525,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V5.6-IA-ZERO-DURATION-HARD-FIX simple rule:
+            # V5.9-IA-HARD-LINE-SAFE-PASS simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -586,6 +588,20 @@ def split_old_items_into_screen_blocks(original_xml, old_items):
     return blocks
 
 
+
+def corrected_line_word_groups_from_text(text):
+    """
+    Return corrected text as list of word groups, one group per pasted line.
+    """
+    text = clean_text_for_injection(text)
+    groups = []
+    for line in text.splitlines():
+        words = re.findall(r"\S+", line.strip())
+        if words:
+            groups.append(words)
+    return groups
+
+
 def corrected_lines_as_word_groups(clean_text):
     """
     Keep corrected pasted line breaks as phrase groups.
@@ -611,13 +627,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V5.6-IA-ZERO-DURATION-HARD-FIX.
+    Hard experimental lyrics distribution V5.9-IA-HARD-LINE-SAFE-PASS.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V5.6-IA-ZERO-DURATION-HARD-FIX distributes corrected WORDS across screen blocks proportionally to the
+    V5.9-IA-HARD-LINE-SAFE-PASS distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -712,7 +728,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V5.6-IA-ZERO-DURATION-HARD-FIX:
+    V5.9-IA-HARD-LINE-SAFE-PASS:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -766,7 +782,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V5.6-IA-ZERO-DURATION-HARD-FIX.
+    Works on chunks, not raw words, in V5.9-IA-HARD-LINE-SAFE-PASS.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -787,7 +803,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V5.6-IA-ZERO-DURATION-HARD-FIX. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V5.9-IA-HARD-LINE-SAFE-PASS. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -849,9 +865,92 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     return anchors
 
 
+
+def build_smart_line_reference(old_items, clean_text):
+    """
+    Build a Smart mapping reference for the same corrected text, then group it
+    by pasted corrected line.
+
+    This is used only as a second pass for Hard mode. The Hard engine remains
+    responsible for robust text/chunk choices, but Smart gives safer local
+    timing reference for normal line continuity.
+    """
+    words, line_ids = words_and_line_ids_from_text(clean_text)
+    smart = map_new_words_to_original_prefixes(old_items, words)
+
+    by_line = {}
+    for idx, item in enumerate(smart):
+        lid = line_ids[idx] if idx < len(line_ids) else None
+        if lid is None:
+            continue
+        by_line.setdefault(lid, []).append(item)
+
+    return by_line
+
+
+def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_words_per_line=12):
+    """
+    V5.9 HARD LINE SAFE PASS
+
+    This replaces the older aggressive Smart line pass.
+
+    IMPORTANT:
+    - The first Hard V5.6 analysis is preserved.
+    - This function does NOT clamp Hard old_index to a Smart span.
+    - This function does NOT rewrite the Hard alignment globally.
+    - This function does NOT replace Hard text/chunks.
+    - It only assigns corrected_line_id metadata to Hard chunks, then applies
+      tiny local repairs where the line structure is unambiguous.
+
+    Why:
+    The previous version changed:
+        items[pos]["old_index"] = new_old
+        items[pos]["prefix"] = prefix_for_old_index(new_old)
+
+    for many chunks inside a line. That was too aggressive and caused Corsican
+    regressions. This safe pass only allows local zero-duration repair, such as:
+
+        [102.76-104.60] sola
+        [110.25-110.25] è cara
+        [110.25-111.02] Corsica
+
+    When "è cara" belongs to the same corrected line as "sola", it can be
+    repaired locally without moving the next line.
+    """
+    if not hard_mapped:
+        return hard_mapped
+
+    line_groups = corrected_line_word_groups_from_text(clean_text)
+    if not line_groups:
+        return hard_mapped
+
+    items = [dict(x) for x in hard_mapped]
+
+    # Assign Hard chunks to corrected pasted lines by consuming word counts.
+    # Hard chunks may contain several words, e.g. "è cara".
+    cursor = 0
+    for lid, words in enumerate(line_groups):
+        target_count = len(words)
+        consumed = 0
+
+        while cursor < len(items) and consumed < target_count:
+            chunk_words = re.findall(r"\S+", str(items[cursor].get("word", "")).strip())
+            consumed += max(1, len(chunk_words))
+            items[cursor]["corrected_line_id"] = lid
+            items[cursor]["source"] = str(items[cursor].get("source", "")) + "_hard_line_safe"
+            cursor += 1
+
+    # Local-only repair. This may split a previous same-line timestamp range
+    # with a zero/tiny chunk, but does not globally realign anything.
+    items = fix_zero_duration_chunks_inside_same_line(items, min_duration=0.05)
+
+    return items
+
+
+
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V5.6-IA-ZERO-DURATION-HARD-FIX.
+    Hard experimental lyrics mode V5.9-IA-HARD-LINE-SAFE-PASS.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -996,7 +1095,7 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V5.6-IA-ZERO-DURATION-HARD-FIX fix:
+    V5.9-IA-HARD-LINE-SAFE-PASS fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1210,7 +1309,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v56iazhf-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v59iahlsafe-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1289,7 +1388,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V5.6-IA-ZERO-DURATION-HARD-FIX", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V5.9-IA-HARD-LINE-SAFE-PASS", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1400,12 +1499,20 @@ def corrected():
         new_words, line_ids = words_and_line_ids_from_text(clean)
 
         if alignment_mode == "screen":
+            # Hard V5.6 engine is preserved. Second pass is SAFE/local only:
+            # corrected line metadata + zero-duration repair, no global Smart clamp.
             mapped = map_corrected_text_by_screen_blocks(selected["xml"], old_items, clean)
+            mapped = hard_second_pass_smart_line_realign(mapped, old_items, clean, max_words_per_line=12)
         else:
             mapped = map_new_words_to_original_prefixes(old_items, new_words)
 
-        for i, item in enumerate(mapped):
-            item["corrected_line_id"] = line_ids[i] if i < len(line_ids) else None
+        if alignment_mode == "screen":
+            # Hard chunks can contain several corrected words, so their
+            # corrected_line_id was assigned by the safe Hard second pass.
+            pass
+        else:
+            for i, item in enumerate(mapped):
+                item["corrected_line_id"] = line_ids[i] if i < len(line_ids) else None
 
         STATE["old_items"] = old_items
         STATE["new_words"] = new_words
@@ -1427,10 +1534,10 @@ Smart mode — recommended for most songs
 <br>
 <label>
 <input type="radio" name="alignment_mode" value="screen">
-Hard / experimental mode — only for heavily corrupted lyrics
+Hard mode — V5.6 engine + safe line pass
 </label>
 <p class="small">
-Use hard experimental lyrics mode when the original text is extremely wrong and word matching or screen distribution creates large offsets
+Hard mode preserves the V5.6 robust engine, then applies a safe local line pass only for zero-duration repairs. No global Smart clamp.
 (for example Corsican or heavily distorted IA recognition).
 </p>
 <br>
@@ -1467,7 +1574,7 @@ def preview():
             new_xml = rebuild_xml_with_cloned_prefixes(selected["xml"], old_items, mapped)
             backup = write_lyrics_to_db(selected["lid_hex"], new_xml)
             messages.append(f"Backup created: {backup}")
-            messages.append(f"Correction complete. Words written: {len(mapped)}")
+            messages.append(f"Correction complete. Exact final XML written. Words written: {len(mapped)}")
 
             if close_vdj and reopen_vdj:
                 ok, msg = reopen_virtualdj()
@@ -1477,6 +1584,10 @@ def preview():
             return redirect(url_for("done"))
         except Exception as e:
             STATE["message"] = f"Write error: {e}"
+
+    # Exact XML that will be written if the user clicks Write.
+    # This includes final local repairs such as zero-duration fixes.
+    final_xml_preview = rebuild_xml_with_cloned_prefixes(selected["xml"], old_items, mapped)
 
     counts = {}
     for item in mapped:
@@ -1506,7 +1617,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks that collide with the next word timestamp are repaired locally. Smart mode keeps added words near matched words. Hard experimental lyrics mode locks anchors, groups tiny connector words with neighbours, and removes internal clear-screen separators.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
 </div>
 
 <div class="card">
@@ -1517,10 +1628,19 @@ Written lines: <strong>{len(mapped)}</strong></p>
 </div>
 
 <div class="card">
+<h3>Final XML preview — exact database output</h3>
+<p class="small">
+This is the exact XML that will be written to <code>extra.db</code>.
+Check here before writing: if an old wrong word appears here, it will also appear in VirtualDJ.
+</p>
+<textarea readonly style="min-height:360px;">{final_xml_preview}</textarea>
+</div>
+
+<div class="card">
 <form method="post">
 <label><input type="checkbox" name="close_vdj" checked> Close VirtualDJ before writing</label><br>
 <label><input type="checkbox" name="reopen_vdj" checked> Reopen VirtualDJ after writing</label><br><br>
-<input type="submit" value="Write to extra.db">
+<input type="submit" value="Write this exact XML to extra.db">
 <a class="button secondary" href="/corrected">Back</a>
 </form>
 </div>
