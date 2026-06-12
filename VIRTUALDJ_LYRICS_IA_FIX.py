@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V6.4-IA-GAP-HARD-FIX
+VIRTUALDJ LYRICS IA FIX - V6.7-IA-GAP-CHECKBOX-FINAL-FIX
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_4_ia_gap_hard_fix.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_7_ia_gap_checkbox_final_fix.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -69,7 +69,7 @@ STATE = {
     "gap_extender": True,
     "gap_min": 2.0,
     "gap_ratio": 0.66,
-    "gap_max": 3.0,
+    "gap_max": 4.0,
 }
 
 
@@ -90,7 +90,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V6.4-IA-GAP-HARD-FIX\n"
+            "VIRTUALDJ LYRICS IA FIX V6.7-IA-GAP-CHECKBOX-FINAL-FIX\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -529,7 +529,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V6.4-IA-GAP-HARD-FIX simple rule:
+            # V6.7-IA-GAP-CHECKBOX-FINAL-FIX simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -631,13 +631,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V6.4-IA-GAP-HARD-FIX.
+    Hard experimental lyrics distribution V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V6.4-IA-GAP-HARD-FIX distributes corrected WORDS across screen blocks proportionally to the
+    V6.7-IA-GAP-CHECKBOX-FINAL-FIX distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -732,7 +732,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V6.4-IA-GAP-HARD-FIX:
+    V6.7-IA-GAP-CHECKBOX-FINAL-FIX:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -786,7 +786,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V6.4-IA-GAP-HARD-FIX.
+    Works on chunks, not raw words, in V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -807,7 +807,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V6.4-IA-GAP-HARD-FIX. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V6.7-IA-GAP-CHECKBOX-FINAL-FIX. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -954,7 +954,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V6.4-IA-GAP-HARD-FIX.
+    Hard experimental lyrics mode V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1096,11 +1096,10 @@ def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     return mapped
 
 def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items):
-    mapped_items = apply_gap_extender_if_enabled(mapped_items)
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V6.4-IA-GAP-HARD-FIX fix:
+    V6.7-IA-GAP-CHECKBOX-FINAL-FIX fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1293,7 +1292,7 @@ def make_vdj_prefix_gap(start_value, end_value, info):
     return "[" + format_vdj_number_gap(start_value, info) + "-" + format_vdj_number_gap(end_value, info) + "]" + info.get("spacing", " ")
 
 
-def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=0.66, max_extension=3.0):
+def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=0.66, max_extension=4.0):
     """
     Optional final visual transition pass.
 
@@ -1382,9 +1381,6 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     if any("screen_index" in item for item in mapped_items):
         return rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items)
-
-    mapped_items = apply_gap_extender_if_enabled(mapped_items)
-
     lines = (original_xml or "").splitlines()
     timed_indices = [item["line_index"] for item in old_items]
 
@@ -1421,13 +1417,28 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
 
     return "\n".join(before + output + after)
 
+
+def build_final_xml_for_preview_and_write(original_xml, old_items, mapped_items):
+    """
+    Single final XML path used by Preview and Write.
+
+    Gap Extender is applied exactly once here, after Smart/Hard mapping is done,
+    before XML rebuild. This works for both modes because the mode-specific
+    rebuild happens after this point.
+    """
+    final_items = [dict(x) for x in (mapped_items or [])]
+    final_items = apply_gap_extender_if_enabled(final_items)
+    return rebuild_xml_with_cloned_prefixes(original_xml, old_items, final_items)
+
+
+
 def write_lyrics_to_db(lid_hex, new_xml):
     db = get_db_path()
     if not db:
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v64iaghf-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v67iagcff-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1437,6 +1448,112 @@ def write_lyrics_to_db(lid_hex, new_xml):
     con.commit()
     con.close()
     return backup
+
+
+
+# ---------------------------
+# Manual visual editor helpers
+# ---------------------------
+
+def manual_editor_parse_prefix(prefix):
+    if "parse_vdj_prefix_range_gap" in globals():
+        info = parse_vdj_prefix_range_gap(prefix)
+        if info:
+            return info
+    if "parse_vdj_prefix_range_zdf" in globals():
+        info = parse_vdj_prefix_range_zdf(prefix)
+        if info:
+            return info
+
+    m = re.match(r"^(\[)([0-9]+(?:[.,][0-9]+)?)-([0-9]+(?:[.,][0-9]+)?)(\])(\s*)", prefix or "")
+    if not m:
+        return None
+
+    start_s = m.group(2)
+    end_s = m.group(3)
+
+    def to_float(x):
+        return float(x.replace(",", "."))
+
+    decimals = max(
+        len(start_s.split(".")[-1]) if "." in start_s else (len(start_s.split(",")[-1]) if "," in start_s else 0),
+        len(end_s.split(".")[-1]) if "." in end_s else (len(end_s.split(",")[-1]) if "," in end_s else 0),
+    )
+
+    return {
+        "start": to_float(start_s),
+        "end": to_float(end_s),
+        "comma": "," in start_s or "," in end_s,
+        "decimals": decimals,
+        "spacing": m.group(5) or " ",
+    }
+
+
+def manual_editor_make_prefix(start_value, end_value, old_prefix):
+    info = manual_editor_parse_prefix(old_prefix) or {"comma": False, "decimals": 2, "spacing": " "}
+
+    if "make_vdj_prefix_gap" in globals():
+        return make_vdj_prefix_gap(start_value, end_value, info)
+    if "make_vdj_prefix_zdf" in globals():
+        return make_vdj_prefix_zdf(start_value, end_value, info)
+
+    s = f"{float(start_value):.{info.get('decimals', 2)}f}"
+    e = f"{float(end_value):.{info.get('decimals', 2)}f}"
+    if info.get("comma"):
+        s = s.replace(".", ",")
+        e = e.replace(".", ",")
+    return "[" + s + "-" + e + "]" + info.get("spacing", " ")
+
+
+def manual_editor_float(value, fallback):
+    try:
+        return float(str(value).replace(",", "."))
+    except Exception:
+        return fallback
+
+
+def escape_html_text(value):
+    value = "" if value is None else str(value)
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def manual_editor_rows(mapped_items, include_gap_extender=True):
+    items = [dict(x) for x in (mapped_items or [])]
+
+    if include_gap_extender and "apply_gap_extender_if_enabled" in globals():
+        items = apply_gap_extender_if_enabled(items)
+
+    rows = []
+    for i, item in enumerate(items):
+        info = manual_editor_parse_prefix(item.get("prefix", "")) or {}
+        start = info.get("start", 0.0)
+        end = info.get("end", start)
+        duration = max(0.0, end - start)
+
+        gap = None
+        if i + 1 < len(items):
+            nxt = manual_editor_parse_prefix(items[i + 1].get("prefix", ""))
+            if nxt:
+                gap = nxt["start"] - end
+
+        rows.append({
+            "index": i,
+            "start": start,
+            "end": end,
+            "duration": duration,
+            "gap": gap,
+            "word": item.get("word", ""),
+            "source": item.get("source", ""),
+            "old_index": item.get("old_index"),
+            "prefix": item.get("prefix", ""),
+        })
+
+    return rows
 
 
 # ---------------------------
@@ -1458,6 +1575,10 @@ input[type=submit], .button { padding: 10px 16px; border: 0; border-radius: 8px;
 .msg { background: #fff6d7; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 td, th { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
+.warn { background: #fff2cc; border-radius: 6px; padding: 2px 6px; display: inline-block; }
+.danger { background: #ffd6d6; border-radius: 6px; padding: 2px 6px; display: inline-block; }
+.screenbox { background: #111; color: white; border-radius: 12px; padding: 16px; text-align: center; font-size: 20px; line-height: 1.35; margin: 8px 0; }
+.timeinput { width: 75px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 </style>
 """
 
@@ -1506,7 +1627,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V6.4-IA-GAP-HARD-FIX", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V6.7-IA-GAP-CHECKBOX-FINAL-FIX", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1614,7 +1735,7 @@ def corrected():
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
 
-        STATE["gap_extender"] = request.form.get("gap_extender", "off") == "on"
+        STATE["gap_extender"] = "on" in request.form.getlist("gap_extender")
         try:
             STATE["gap_min"] = float(request.form.get("gap_min", "2.0"))
         except Exception:
@@ -1624,9 +1745,9 @@ def corrected():
         except Exception:
             STATE["gap_ratio"] = 0.66
         try:
-            STATE["gap_max"] = float(request.form.get("gap_max", "3.0"))
+            STATE["gap_max"] = float(request.form.get("gap_max", "4.0"))
         except Exception:
-            STATE["gap_max"] = 3.0
+            STATE["gap_max"] = 4.0
 
         old_items = extract_timed_lines_from_vdj_xml(selected["xml"])
         new_words, line_ids = words_and_line_ids_from_text(clean)
@@ -1723,7 +1844,7 @@ def preview():
                 return redirect(url_for("preview"))
 
         try:
-            new_xml = rebuild_xml_with_cloned_prefixes(selected["xml"], old_items, mapped)
+            new_xml = build_final_xml_for_preview_and_write(selected["xml"], old_items, mapped)
             backup = write_lyrics_to_db(selected["lid_hex"], new_xml)
             messages.append(f"Backup created: {backup}")
             messages.append(f"Correction complete. Exact final XML written. Words written: {len(mapped)}")
@@ -1739,7 +1860,7 @@ def preview():
 
     # Exact XML that will be written if the user clicks Write.
     # This includes final local repairs such as zero-duration fixes.
-    final_xml_preview = rebuild_xml_with_cloned_prefixes(selected["xml"], old_items, mapped)
+    final_xml_preview = build_final_xml_for_preview_and_write(selected["xml"], old_items, mapped)
 
     counts = {}
     for item in mapped:
@@ -1770,7 +1891,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied once in the final XML path if enabled. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
 </div>
 
 <div class="card">
@@ -1793,8 +1914,131 @@ Check here before writing: if an old wrong word appears here, it will also appea
 <form method="post">
 <label><input type="checkbox" name="close_vdj" checked> Close VirtualDJ before writing</label><br>
 <label><input type="checkbox" name="reopen_vdj" checked> Reopen VirtualDJ after writing</label><br><br>
+<a class="button secondary" href="/manual-editor">Manual visual editor</a>
+<br><br>
 <input type="submit" value="Write this exact XML to extra.db">
 <a class="button secondary" href="/corrected">Back</a>
+</form>
+</div>
+""")
+
+
+
+@app.route("/manual-editor", methods=["GET", "POST"])
+def manual_editor():
+    selected = STATE.get("selected")
+    mapped = STATE.get("mapped_items", [])
+
+    if not selected or not mapped:
+        return redirect(url_for("preview"))
+
+    if request.method == "POST":
+        edited = [dict(x) for x in mapped]
+
+        for i, item in enumerate(edited):
+            old_info = manual_editor_parse_prefix(item.get("prefix", ""))
+            old_start = old_info["start"] if old_info else 0.0
+            old_end = old_info["end"] if old_info else old_start
+
+            start = manual_editor_float(request.form.get(f"start_{i}", old_start), old_start)
+            end = manual_editor_float(request.form.get(f"end_{i}", old_end), old_end)
+
+            if end < start:
+                end = start
+
+            item["prefix"] = manual_editor_make_prefix(start, end, item.get("prefix", ""))
+            item["source"] = str(item.get("source", "")) + "_manual_edit"
+
+        STATE["mapped_items"] = edited
+        STATE["gap_extender"] = False  # manual edits are final timings
+        STATE["message"] = "Manual timestamp edits applied. Gap Extender disabled to preserve manual timings. Check final XML preview before writing."
+        return redirect(url_for("preview"))
+
+    rows_data = manual_editor_rows(mapped, include_gap_extender=True)
+
+    rows = ""
+    visual = ""
+
+    for row in rows_data:
+        i = row["index"]
+        gap = row["gap"]
+        duration = row["duration"]
+
+        duration_badge = ""
+        if duration <= 0.10:
+            duration_badge = '<span class="danger">duration tiny</span>'
+        elif duration <= 0.25:
+            duration_badge = '<span class="warn">duration short</span>'
+
+        if gap is None:
+            gap_badge = ""
+        elif gap >= 3.0:
+            gap_badge = f'<span class="danger">gap {gap:.2f}s</span>'
+        elif gap >= 2.0:
+            gap_badge = f'<span class="warn">gap {gap:.2f}s</span>'
+        else:
+            gap_badge = f'<span class="small">gap {gap:.2f}s</span>'
+
+        old_display = "" if row["old_index"] is None else str(row["old_index"] + 1)
+        word_html = escape_html_text(row["word"])
+        source_html = escape_html_text(row["source"])
+
+        rows += f"""
+<tr>
+<td>{i + 1}</td>
+<td><input class="timeinput" name="start_{i}" value="{row['start']:.2f}"></td>
+<td><input class="timeinput" name="end_{i}" value="{row['end']:.2f}"></td>
+<td>{duration:.2f}s {duration_badge}</td>
+<td>{gap_badge}</td>
+<td>{old_display}</td>
+<td>{source_html}</td>
+<td>{word_html}</td>
+</tr>
+"""
+
+        visual += f"""
+<div class="screenbox">
+<div class="small">{row['start']:.2f} → {row['end']:.2f}</div>
+{word_html}
+</div>
+"""
+
+    msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
+
+    return page("Manual visual editor", f"""
+{msg}
+<div class="card">
+<h2>Manual visual timestamp editor</h2>
+<p class="small">
+Approximate visual simulation. VirtualDJ has its own layout engine.
+Edit start/end manually for final corrections, then apply and check the final XML preview.
+</p>
+<a class="button secondary" href="/preview">Back to preview</a>
+</div>
+
+<div class="card">
+<h3>Rough visual simulation</h3>
+{visual}
+</div>
+
+<div class="card">
+<form method="post">
+<table>
+<tr>
+<th>#</th>
+<th>Start</th>
+<th>End</th>
+<th>Duration</th>
+<th>Gap to next</th>
+<th>old#</th>
+<th>source</th>
+<th>text</th>
+</tr>
+{rows}
+</table>
+<br>
+<input type="submit" value="Apply manual edits">
+<a class="button secondary" href="/preview">Cancel</a>
 </form>
 </div>
 """)
