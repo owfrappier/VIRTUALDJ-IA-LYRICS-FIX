@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V6.0-IA-GAP-EXTEND-PASS
+VIRTUALDJ LYRICS IA FIX - V6.2-IA-HARD-LINE-CHUNK-SPLIT
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_0_ia_gap_extend_pass.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_2_ia_hard_line_chunk_split.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -66,6 +66,10 @@ STATE = {
     "new_words": [],
     "mapped_items": [],
     "alignment_mode": "smart",
+    "gap_extender": True,
+    "gap_min": 2.0,
+    "gap_ratio": 0.66,
+    "gap_max": 3.0,
 }
 
 
@@ -86,7 +90,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V6.0-IA-GAP-EXTEND-PASS\n"
+            "VIRTUALDJ LYRICS IA FIX V6.2-IA-HARD-LINE-CHUNK-SPLIT\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -525,7 +529,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V6.0-IA-GAP-EXTEND-PASS simple rule:
+            # V6.2-IA-HARD-LINE-CHUNK-SPLIT simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -627,13 +631,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V6.0-IA-GAP-EXTEND-PASS.
+    Hard experimental lyrics distribution V6.2-IA-HARD-LINE-CHUNK-SPLIT.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V6.0-IA-GAP-EXTEND-PASS distributes corrected WORDS across screen blocks proportionally to the
+    V6.2-IA-HARD-LINE-CHUNK-SPLIT distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -728,7 +732,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V6.0-IA-GAP-EXTEND-PASS:
+    V6.2-IA-HARD-LINE-CHUNK-SPLIT:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -782,7 +786,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V6.0-IA-GAP-EXTEND-PASS.
+    Works on chunks, not raw words, in V6.2-IA-HARD-LINE-CHUNK-SPLIT.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -803,7 +807,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V6.0-IA-GAP-EXTEND-PASS. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V6.2-IA-HARD-LINE-CHUNK-SPLIT. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -888,6 +892,130 @@ def build_smart_line_reference(old_items, clean_text):
     return by_line
 
 
+
+def split_hard_chunks_on_corrected_line_boundaries(hard_mapped, clean_text):
+    """
+    V6.2 Hard line chunk split.
+
+    Hard mode groups small connector words with neighbours:
+        "è cara", "di purezza", "a so ghjente", ...
+
+    That is good for avoiding isolated tiny words, but it can make the second
+    line pass less precise than Smart when a Hard chunk crosses a pasted line
+    boundary.
+
+    This function splits ONLY those Hard chunks that cross corrected-line
+    boundaries. It preserves the original Hard prefix/old_index, and only
+    distributes the chunk's own timestamp range locally between the split parts.
+
+    It does NOT redo the Hard analysis.
+    It does NOT clamp to Smart.
+    It does NOT move neighbouring chunks.
+    """
+    if not hard_mapped:
+        return hard_mapped
+
+    line_groups = corrected_line_word_groups_from_text(clean_text)
+    if not line_groups:
+        return hard_mapped
+
+    # Flat corrected line ids by word count.
+    flat_line_ids = []
+    for lid, words in enumerate(line_groups):
+        flat_line_ids.extend([lid] * len(words))
+
+    out = []
+    word_cursor = 0
+
+    for item in hard_mapped:
+        chunk_text = str(item.get("word", "")).strip()
+        words = re.findall(r"\S+", chunk_text)
+
+        if len(words) <= 1:
+            new_item = dict(item)
+            if word_cursor < len(flat_line_ids):
+                new_item["corrected_line_id"] = flat_line_ids[word_cursor]
+            out.append(new_item)
+            word_cursor += max(1, len(words))
+            continue
+
+        lids = []
+        for k in range(len(words)):
+            idx = word_cursor + k
+            lids.append(flat_line_ids[idx] if idx < len(flat_line_ids) else None)
+
+        # If all words in this chunk are in the same corrected line, keep it.
+        unique_lids = [x for x in dict.fromkeys(lids) if x is not None]
+        if len(unique_lids) <= 1:
+            new_item = dict(item)
+            new_item["corrected_line_id"] = unique_lids[0] if unique_lids else item.get("corrected_line_id")
+            out.append(new_item)
+            word_cursor += len(words)
+            continue
+
+        # Split the chunk by consecutive corrected line ids.
+        groups = []
+        cur_lid = lids[0]
+        cur_words = []
+
+        for w, lid in zip(words, lids):
+            if cur_words and lid != cur_lid:
+                groups.append((cur_lid, cur_words))
+                cur_words = [w]
+                cur_lid = lid
+            else:
+                cur_words.append(w)
+
+        if cur_words:
+            groups.append((cur_lid, cur_words))
+
+        info = parse_vdj_prefix_range_zdf(item.get("prefix", ""))
+        if not info or len(groups) <= 1:
+            # Safe fallback: keep original if timing cannot be parsed.
+            new_item = dict(item)
+            new_item["corrected_line_id"] = lids[0] if lids else item.get("corrected_line_id")
+            out.append(new_item)
+            word_cursor += len(words)
+            continue
+
+        start = info["start"]
+        end = info["end"]
+        if end <= start:
+            end = start + 0.05 * len(groups)
+
+        weights = []
+        for _, group_words in groups:
+            weights.append(max(1, sum(len(re.sub(r"\s+", "", w)) for w in group_words)))
+
+        total = sum(weights) or 1
+        cursor_time = start
+
+        for gi, ((lid, group_words), weight) in enumerate(zip(groups, weights)):
+            new_item = dict(item)
+            new_item["word"] = " ".join(group_words)
+            new_item["corrected_line_id"] = lid
+
+            if gi == len(groups) - 1:
+                seg_start = cursor_time
+                seg_end = end
+            else:
+                seg_start = cursor_time
+                seg_end = cursor_time + (end - start) * (weight / total)
+
+            if seg_end <= seg_start:
+                seg_end = seg_start + 0.02
+
+            new_item["prefix"] = make_vdj_prefix_zdf(seg_start, seg_end, info)
+            new_item["source"] = str(new_item.get("source", "")) + "_hard_line_split"
+            out.append(new_item)
+
+            cursor_time = seg_end
+
+        word_cursor += len(words)
+
+    return out
+
+
 def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_words_per_line=12):
     """
     V5.9 HARD LINE SAFE PASS
@@ -950,7 +1078,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V6.0-IA-GAP-EXTEND-PASS.
+    Hard experimental lyrics mode V6.2-IA-HARD-LINE-CHUNK-SPLIT.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1092,18 +1220,10 @@ def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     return mapped
 
 def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items):
-    # Hard final visual gap pass.
-    mapped_items = extend_long_gaps_final_pass(
-        mapped_items,
-        min_gap=2.0,
-        ratio=2.0/3.0,
-        max_extension=4.0
-    )
-
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V6.0-IA-GAP-EXTEND-PASS fix:
+    V6.2-IA-HARD-LINE-CHUNK-SPLIT fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1258,7 +1378,7 @@ def fix_zero_duration_chunks_inside_same_line(mapped_items, min_duration=0.05):
 
 
 
-# --- V6.0 IA GAP EXTEND PASS ---
+# --- V6.1 IA GAP EXTENDER OPTION ---
 
 def parse_vdj_prefix_range_gap(prefix):
     m = re.match(r"^(\[)([0-9]+(?:[.,][0-9]+)?)-([0-9]+(?:[.,][0-9]+)?)(\])(\s*)", prefix or "")
@@ -1296,21 +1416,13 @@ def make_vdj_prefix_gap(start_value, end_value, info):
     return "[" + format_vdj_number_gap(start_value, info) + "-" + format_vdj_number_gap(end_value, info) + "]" + info.get("spacing", " ")
 
 
-def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=2.0/3.0, max_extension=4.0):
+def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=0.66, max_extension=3.0):
     """
-    Final visual transition pass.
+    Optional final visual transition pass.
 
-    Only the END timestamp of the current chunk is extended.
+    Only the END timestamp of the current chunk is extended when a long gap follows.
     The next chunk start is never moved.
     Text is never changed.
-
-    Example:
-        [64.02-64.26] di purezza
-        [68.00-68.20] Ghjuvellu
-
-    becomes approximately:
-        [64.02-66.75] di purezza
-        [68.00-68.20] Ghjuvellu
     """
     if not mapped_items:
         return mapped_items
@@ -1343,6 +1455,34 @@ def extend_long_gaps_final_pass(mapped_items, min_gap=2.0, ratio=2.0/3.0, max_ex
     return items
 
 
+
+def apply_gap_extender_if_enabled(mapped_items):
+    if not STATE.get("gap_extender", True):
+        return mapped_items
+
+    try:
+        min_gap = float(STATE.get("gap_min", 2.0))
+    except Exception:
+        min_gap = 2.0
+
+    try:
+        ratio = float(STATE.get("gap_ratio", 0.66))
+    except Exception:
+        ratio = 0.66
+
+    try:
+        max_extension = float(STATE.get("gap_max", 3.0))
+    except Exception:
+        max_extension = 3.0
+
+    return extend_long_gaps_final_pass(
+        mapped_items,
+        min_gap=min_gap,
+        ratio=ratio,
+        max_extension=max_extension,
+    )
+
+
 def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     Rebuild the XML while preserving VirtualDJ screen/page separators.
@@ -1360,14 +1500,6 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     """
     if any("screen_index" in item for item in mapped_items):
         return rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_items)
-
-    # Smart final visual gap pass.
-    mapped_items = extend_long_gaps_final_pass(
-        mapped_items,
-        min_gap=2.0,
-        ratio=2.0/3.0,
-        max_extension=4.0
-    )
 
     lines = (original_xml or "").splitlines()
     timed_indices = [item["line_index"] for item in old_items]
@@ -1411,7 +1543,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v60iagap-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v62iahlcs-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1490,7 +1622,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V6.0-IA-GAP-EXTEND-PASS", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V6.2-IA-HARD-LINE-CHUNK-SPLIT", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1597,6 +1729,21 @@ def corrected():
     if request.method == "POST":
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
+
+        STATE["gap_extender"] = request.form.get("gap_extender") == "on"
+        try:
+            STATE["gap_min"] = float(request.form.get("gap_min", "2.0"))
+        except Exception:
+            STATE["gap_min"] = 2.0
+        try:
+            STATE["gap_ratio"] = float(request.form.get("gap_ratio", "0.66"))
+        except Exception:
+            STATE["gap_ratio"] = 0.66
+        try:
+            STATE["gap_max"] = float(request.form.get("gap_max", "3.0"))
+        except Exception:
+            STATE["gap_max"] = 3.0
+
         old_items = extract_timed_lines_from_vdj_xml(selected["xml"])
         new_words, line_ids = words_and_line_ids_from_text(clean)
 
@@ -1604,6 +1751,7 @@ def corrected():
             # Hard V5.6 engine is preserved. Second pass is SAFE/local only:
             # corrected line metadata + zero-duration repair, no global Smart clamp.
             mapped = map_corrected_text_by_screen_blocks(selected["xml"], old_items, clean)
+            mapped = split_hard_chunks_on_corrected_line_boundaries(mapped, clean)
             mapped = hard_second_pass_smart_line_realign(mapped, old_items, clean, max_words_per_line=12)
         else:
             mapped = map_new_words_to_original_prefixes(old_items, new_words)
@@ -1636,13 +1784,31 @@ Smart mode — recommended for most songs
 <br>
 <label>
 <input type="radio" name="alignment_mode" value="screen">
-Hard mode — V5.6 engine + safe line pass
+Hard mode — V5.6 engine + line chunk split + safe pass
 </label>
 <p class="small">
-Hard mode preserves the V5.6 robust engine, then applies a safe local line pass only for zero-duration repairs. No global Smart clamp.
+Hard mode preserves the V5.6 robust engine, splits only chunks crossing corrected-line boundaries, then applies the safe local line pass. No global Smart clamp.
 (for example Corsican or heavily distorted IA recognition).
 </p>
 <br>
+<h3>Final visual gap extender</h3>
+<label>
+<input type="checkbox" name="gap_extender" checked>
+Enable gap extender — extend previous chunk over long silent gaps
+</label>
+<p class="small">
+Default: gap &gt; 2.0 s, extend 66% of the gap, max 3.0 s.
+This does not move next word starts and does not change text.
+</p>
+<label>Minimum gap seconds</label>
+<input type="text" name="gap_min" value="2.0">
+<br><br>
+<label>Extension ratio</label>
+<input type="text" name="gap_ratio" value="0.66">
+<br><br>
+<label>Maximum extension seconds</label>
+<input type="text" name="gap_max" value="3.0">
+<br><br>
 <input type="submit" value="Preview alignment">
 <a class="button secondary" href="/results">Back</a>
 </form>
@@ -1719,7 +1885,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. Long visual gaps are extended by 2/3 on the previous chunk. The final XML preview below is the exact database output. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine, adds a safe local line pass, then the final gap extension pass.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine, splits chunks crossing corrected-line boundaries, then adds the safe local line pass.</p>
 </div>
 
 <div class="card">
