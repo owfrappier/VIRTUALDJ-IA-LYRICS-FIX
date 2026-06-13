@@ -1,3 +1,56 @@
+# VIRTUALDJ LYRICS IA FIX – V7.0 IA LRCLIB ARTIST/TITLE
+
+## New in V7.0
+
+### LRCLIB integration redesigned
+
+The previous LRCLIB lookup based on pasted lyrics text has been removed.
+
+After testing, it appeared that LRCLIB search works much more reliably with:
+
+- Artist name
+
+- Song title
+
+than with free lyric fragments.
+
+---
+
+### New workflow
+
+1. Paste approximate IA VirtualDJ lyrics copied from the VirtualDJ lyrics window
+
+2. Search and select the correct lyrics entry in `extra.db`
+
+3. Open the **Corrected Lyrics** page
+
+4. Enter:
+
+   - Artist (optional)
+
+   - Title
+
+5. Click **Search LRCLIB by artist/title**
+
+6. Choose the correct result from the LRCLIB list
+
+7. Lyrics are automatically inserted into the corrected text area
+
+8. Continue with Smart or Hard alignment
+
+9. Preview and write back to `extra.db`
+
+---
+
+### User interface improvements
+
+Step 1 title changed from:
+
+```text
+
+Paste approximate / OCR lyrics
+
+
 V5.6 – Zero-duration chunk fix
 
 - Fixed corrected lyric chunks receiving zero duration.

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V6.7-IA-GAP-CHECKBOX-FINAL-FIX
+VIRTUALDJ LYRICS IA FIX - V7.0-IA-LRCLIB-ARTIST-TITLE
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v6_7_ia_gap_checkbox_final_fix.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_0_ia_lrclib_artist_title.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -38,6 +38,9 @@ import sqlite3
 import subprocess
 import time
 import threading
+import json
+import urllib.parse
+import urllib.request
 import webbrowser
 import unicodedata
 from datetime import datetime
@@ -70,6 +73,10 @@ STATE = {
     "gap_min": 2.0,
     "gap_ratio": 0.66,
     "gap_max": 4.0,
+    "lrclib_results": [],
+    "lrclib_clean_text": "",
+    "lrclib_artist": "",
+    "lrclib_title": "",
 }
 
 
@@ -90,7 +97,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V6.7-IA-GAP-CHECKBOX-FINAL-FIX\n"
+            "VIRTUALDJ LYRICS IA FIX V7.0-IA-LRCLIB-ARTIST-TITLE\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -529,7 +536,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V6.7-IA-GAP-CHECKBOX-FINAL-FIX simple rule:
+            # V7.0-IA-LRCLIB-ARTIST-TITLE simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -631,13 +638,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
+    Hard experimental lyrics distribution V7.0-IA-LRCLIB-ARTIST-TITLE.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V6.7-IA-GAP-CHECKBOX-FINAL-FIX distributes corrected WORDS across screen blocks proportionally to the
+    V7.0-IA-LRCLIB-ARTIST-TITLE distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -732,7 +739,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V6.7-IA-GAP-CHECKBOX-FINAL-FIX:
+    V7.0-IA-LRCLIB-ARTIST-TITLE:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -786,7 +793,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
+    Works on chunks, not raw words, in V7.0-IA-LRCLIB-ARTIST-TITLE.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -807,7 +814,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V6.7-IA-GAP-CHECKBOX-FINAL-FIX. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V7.0-IA-LRCLIB-ARTIST-TITLE. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -954,7 +961,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V6.7-IA-GAP-CHECKBOX-FINAL-FIX.
+    Hard experimental lyrics mode V7.0-IA-LRCLIB-ARTIST-TITLE.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1099,7 +1106,7 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V6.7-IA-GAP-CHECKBOX-FINAL-FIX fix:
+    V7.0-IA-LRCLIB-ARTIST-TITLE fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1438,7 +1445,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v67iagcff-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v70ialrcat-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1556,6 +1563,192 @@ def manual_editor_rows(mapped_items, include_gap_extender=True):
     return rows
 
 
+
+# ---------------------------
+# LRCLIB helpers
+# ---------------------------
+
+LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
+
+
+def lrclib_strip_timestamps_and_headers(text):
+    text = "" if text is None else str(text)
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        line = re.sub(r"^\[[^\]]+\]\s*", "", line).strip()
+        line = re.sub(r"\s+", " ", line).strip()
+        if line:
+            out.append(line)
+    return "\n".join(out)
+
+
+def lrclib_build_query_from_text(text, max_chars=120):
+    plain = lrclib_strip_timestamps_and_headers(text)
+    lines = [x.strip() for x in plain.splitlines() if x.strip()]
+    if not lines:
+        return ""
+
+    candidates = sorted(lines, key=lambda x: (len(x.split()), len(x)), reverse=True)
+    chosen = []
+
+    for line in candidates:
+        if len(re.findall(r"\w+", line, flags=re.UNICODE)) < 3:
+            continue
+        chosen.append(line)
+        if len(" ".join(chosen)) >= max_chars:
+            break
+
+    if not chosen:
+        chosen = lines[:3]
+
+    query = re.sub(r"\s+", " ", " ".join(chosen)).strip()
+    return query[:max_chars].strip()
+
+
+def lrclib_synced_to_plain(synced):
+    synced = "" if synced is None else str(synced)
+    out = []
+    for line in synced.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^(\[[0-9]{1,2}:[0-9]{2}(?:[.,][0-9]{1,3})?\])+\s*", "", line).strip()
+        if line:
+            out.append(line)
+    return "\n".join(out)
+
+
+def lrclib_search_from_text(text, limit=8):
+    query = lrclib_build_query_from_text(text)
+    if not query:
+        return [], "No searchable lyric text found."
+
+    url = LRCLIB_SEARCH_URL + "?" + urllib.parse.urlencode({"q": query})
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "VirtualDJ-Lyrics-IA-Fix/6.8 (local user tool)"},
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=12) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+        data = json.loads(raw)
+    except Exception as e:
+        return [], f"LRCLIB request failed: {e}"
+
+    if not isinstance(data, list):
+        return [], "LRCLIB returned an unexpected response."
+
+    results = []
+    for item in data[:limit]:
+        if not isinstance(item, dict):
+            continue
+
+        plain = (item.get("plainLyrics") or "").strip()
+        synced = (item.get("syncedLyrics") or "").strip()
+        chosen = plain or lrclib_synced_to_plain(synced)
+
+        results.append({
+            "id": item.get("id"),
+            "trackName": item.get("trackName") or "",
+            "artistName": item.get("artistName") or "",
+            "albumName": item.get("albumName") or "",
+            "duration": item.get("duration"),
+            "instrumental": item.get("instrumental"),
+            "has_plain": bool(plain),
+            "has_synced": bool(synced),
+            "plainLyrics": plain,
+            "syncedLyrics": synced,
+            "chosenLyrics": chosen,
+            "preview": (chosen or "")[:700],
+        })
+
+    return results, f"LRCLIB query: {query}"
+
+
+
+
+def lrclib_search_by_artist_title(artist, title, limit=10):
+    """
+    LRCLIB search by artist/title.
+
+    LRCLIB search is much more reliable with artist + title than with pasted
+    lyric fragments, so this is the preferred path.
+    """
+    artist = (artist or "").strip()
+    title = (title or "").strip()
+
+    if not artist and not title:
+        return [], "Enter at least Artist or Title for LRCLIB search."
+
+    query = " ".join(x for x in [artist, title] if x).strip()
+    url = LRCLIB_SEARCH_URL + "?" + urllib.parse.urlencode({"q": query})
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "VirtualDJ-Lyrics-IA-Fix/7.0 (local user tool)"},
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=12) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+        data = json.loads(raw)
+    except Exception as e:
+        return [], f"LRCLIB request failed: {e}"
+
+    if not isinstance(data, list):
+        return [], "LRCLIB returned an unexpected response."
+
+    # Score results so exact-ish artist/title matches appear first.
+    def norm(x):
+        return normalize(x or "")
+
+    wanted_artist = norm(artist)
+    wanted_title = norm(title)
+
+    scored = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+
+        plain = (item.get("plainLyrics") or "").strip()
+        synced = (item.get("syncedLyrics") or "").strip()
+        chosen = plain or lrclib_synced_to_plain(synced)
+
+        track = item.get("trackName") or ""
+        art = item.get("artistName") or ""
+
+        score = 0
+        if wanted_title and wanted_title in norm(track):
+            score += 100
+        if wanted_artist and wanted_artist in norm(art):
+            score += 100
+        if plain:
+            score += 10
+        if synced:
+            score += 5
+
+        scored.append((score, {
+            "id": item.get("id"),
+            "trackName": track,
+            "artistName": art,
+            "albumName": item.get("albumName") or "",
+            "duration": item.get("duration"),
+            "instrumental": item.get("instrumental"),
+            "has_plain": bool(plain),
+            "has_synced": bool(synced),
+            "plainLyrics": plain,
+            "syncedLyrics": synced,
+            "chosenLyrics": chosen,
+            "preview": (chosen or "")[:700],
+        }))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [x[1] for x in scored[:limit]], f"LRCLIB query: {query}"
+
 # ---------------------------
 # Web UI
 # ---------------------------
@@ -1621,17 +1814,19 @@ def index():
                     return redirect(url_for("index"))
 
             STATE["results"] = search_lyrics_entries(rough)
+            STATE["lrclib_clean_text"] = ""
+            STATE["lrclib_results"] = []
             STATE["message"] = ""
             return redirect(url_for("results"))
         except Exception as e:
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V6.7-IA-GAP-CHECKBOX-FINAL-FIX", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V7.0-IA-LRCLIB-ARTIST-TITLE", f"""
 {msg}
 <div class="card">
 <form method="post">
-<h2>1. Paste approximate / OCR lyrics</h2>
+<h2>1. Paste approximate IA VIRTUALDJ LYRICS from VIRTUALDJ lyrics windows</h2>
 <textarea name="rough_text">{STATE.get("rough_text", "")}</textarea>
 <br><br>
 <label><input type="checkbox" name="close_before_read" checked> Close VirtualDJ before reading extra.db</label>
@@ -1694,6 +1889,76 @@ def select_db():
 """)
 
 
+
+@app.route("/lrclib-results", methods=["GET", "POST"])
+def lrclib_results():
+    results = STATE.get("lrclib_results", [])
+
+    if request.method == "POST":
+        idx = int(request.form.get("choice", "0"))
+        if 0 <= idx < len(results):
+            selected = results[idx]
+            STATE["lrclib_clean_text"] = selected.get("chosenLyrics") or ""
+            STATE["lrclib_artist"] = selected.get("artistName") or STATE.get("lrclib_artist", "")
+            STATE["lrclib_title"] = selected.get("trackName") or STATE.get("lrclib_title", "")
+            STATE["message"] = (
+                "LRCLIB lyrics loaded: "
+                + (selected.get("artistName") or "")
+                + " — "
+                + (selected.get("trackName") or "")
+            )
+            return redirect(url_for("corrected"))
+
+    msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
+
+    if not results:
+        return page("LRCLIB results", f"""
+{msg}
+<div class="card">
+<p>No LRCLIB result found for this artist/title.</p>
+<a class="button secondary" href="/">Back</a>
+</div>
+""")
+
+    items = ""
+    for i, r in enumerate(results):
+        title = escape_html_text(r.get("trackName", ""))
+        artist = escape_html_text(r.get("artistName", ""))
+        album = escape_html_text(r.get("albumName", ""))
+        preview = escape_html_text(r.get("preview", ""))
+
+        badges = []
+        if r.get("has_plain"):
+            badges.append('<span class="badge">plain</span>')
+        if r.get("has_synced"):
+            badges.append('<span class="badge">synced</span>')
+        if r.get("instrumental"):
+            badges.append('<span class="badge">instrumental</span>')
+        badge_html = " ".join(badges)
+
+        checked = "checked" if i == 0 else ""
+        items += f"""
+<div class="result">
+<label><input type="radio" name="choice" value="{i}" {checked}> <strong>{artist} — {title}</strong></label><br>
+<span class="small">{album}</span><br>
+{badge_html}
+<div class="preview">{preview}</div>
+</div>
+"""
+
+    return page("LRCLIB results", f"""
+{msg}
+<div class="card">
+<h2>Choose LRCLIB artist/title result</h2>
+<form method="post">
+{items}
+<input type="submit" value="Use selected LRCLIB lyrics in corrected text box">
+<a class="button secondary" href="/">Back</a>
+</form>
+</div>
+""")
+
+
 @app.route("/results", methods=["GET", "POST"])
 def results():
     results = STATE.get("results", [])
@@ -1734,6 +1999,17 @@ def corrected():
     if request.method == "POST":
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
+
+        if request.form.get("action") == "lrclib":
+            artist = request.form.get("lrclib_artist", "").strip()
+            title = request.form.get("lrclib_title", "").strip()
+            STATE["lrclib_artist"] = artist
+            STATE["lrclib_title"] = title
+            results, msg = lrclib_search_by_artist_title(artist, title)
+            STATE["lrclib_results"] = results
+            STATE["lrclib_clean_text"] = clean
+            STATE["message"] = msg
+            return redirect(url_for("lrclib_results"))
 
         STATE["gap_extender"] = "on" in request.form.getlist("gap_extender")
         try:
@@ -1777,8 +2053,20 @@ def corrected():
     return page("Corrected lyrics", f"""
 <div class="card">
 <h2>2. Paste clean / corrected lyrics</h2>
+<p class="small">If LRCLIB was used, this box is prefilled with the selected LRCLIB plain lyrics.</p>
 <form method="post">
-<textarea name="clean_text"></textarea>
+<div class="card" style="box-shadow:none; border:1px solid #eee;">
+<h3>Find corrected lyrics on LRCLIB</h3>
+<p class="small">LRCLIB search works best with artist and title.</p>
+<label>Artist</label>
+<input type="text" name="lrclib_artist" value="{STATE.get("lrclib_artist", "")}">
+<br><br>
+<label>Title</label>
+<input type="text" name="lrclib_title" value="{STATE.get("lrclib_title", "")}">
+<br><br>
+<button class="button secondary" type="submit" name="action" value="lrclib">Search LRCLIB by artist/title</button>
+</div>
+<textarea name="clean_text">{STATE.get("lrclib_clean_text", "")}</textarea>
 <br><br>
 <h3>Alignment mode</h3>
 <label>
@@ -1814,7 +2102,7 @@ This does not move next word starts and does not change text.
 <label>Maximum extension seconds</label>
 <input type="text" name="gap_max" value="4.0">
 <br><br>
-<input type="submit" value="Preview alignment">
+<input type="submit" name="action" value="Preview alignment">
 <a class="button secondary" href="/results">Back</a>
 </form>
 </div>
