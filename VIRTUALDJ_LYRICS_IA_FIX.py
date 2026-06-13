@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V7.0-IA-LRCLIB-ARTIST-TITLE
+VIRTUALDJ LYRICS IA FIX - V7.1-IA-LRCLIB-LAST-END-FIX
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_0_ia_lrclib_artist_title.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_1_ia_lrclib_last_end_fix.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -77,6 +77,7 @@ STATE = {
     "lrclib_clean_text": "",
     "lrclib_artist": "",
     "lrclib_title": "",
+    "last_lyric_extension": 3.0,
 }
 
 
@@ -97,7 +98,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V7.0-IA-LRCLIB-ARTIST-TITLE\n"
+            "VIRTUALDJ LYRICS IA FIX V7.1-IA-LRCLIB-LAST-END-FIX\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -536,7 +537,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V7.0-IA-LRCLIB-ARTIST-TITLE simple rule:
+            # V7.1-IA-LRCLIB-LAST-END-FIX simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -638,13 +639,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V7.0-IA-LRCLIB-ARTIST-TITLE.
+    Hard experimental lyrics distribution V7.1-IA-LRCLIB-LAST-END-FIX.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V7.0-IA-LRCLIB-ARTIST-TITLE distributes corrected WORDS across screen blocks proportionally to the
+    V7.1-IA-LRCLIB-LAST-END-FIX distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -739,7 +740,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V7.0-IA-LRCLIB-ARTIST-TITLE:
+    V7.1-IA-LRCLIB-LAST-END-FIX:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -793,7 +794,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V7.0-IA-LRCLIB-ARTIST-TITLE.
+    Works on chunks, not raw words, in V7.1-IA-LRCLIB-LAST-END-FIX.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -814,7 +815,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V7.0-IA-LRCLIB-ARTIST-TITLE. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V7.1-IA-LRCLIB-LAST-END-FIX. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -961,7 +962,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V7.0-IA-LRCLIB-ARTIST-TITLE.
+    Hard experimental lyrics mode V7.1-IA-LRCLIB-LAST-END-FIX.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1106,7 +1107,7 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V7.0-IA-LRCLIB-ARTIST-TITLE fix:
+    V7.1-IA-LRCLIB-LAST-END-FIX fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1425,18 +1426,64 @@ def rebuild_xml_with_cloned_prefixes(original_xml, old_items, mapped_items):
     return "\n".join(before + output + after)
 
 
+
+def extend_last_lyric_final_pass(mapped_items, extension_seconds=3.0):
+    """
+    Cosmetic final pass: keep the last lyric visible a little longer.
+    We usually do not know the real track duration from the lyrics entry alone,
+    so this adds a fixed tail extension to the final lyric chunk.
+    """
+    if not mapped_items:
+        return mapped_items
+
+    items = [dict(x) for x in mapped_items]
+
+    try:
+        extension_seconds = float(extension_seconds)
+    except Exception:
+        extension_seconds = 3.0
+
+    if extension_seconds <= 0:
+        return items
+
+    last = items[-1]
+    info = None
+
+    if "parse_vdj_prefix_range_gap" in globals():
+        info = parse_vdj_prefix_range_gap(last.get("prefix", ""))
+
+    if not info and "parse_vdj_prefix_range_zdf" in globals():
+        info = parse_vdj_prefix_range_zdf(last.get("prefix", ""))
+
+    if not info:
+        return items
+
+    new_end = info["end"] + extension_seconds
+
+    if "make_vdj_prefix_gap" in globals():
+        last["prefix"] = make_vdj_prefix_gap(info["start"], new_end, info)
+    elif "make_vdj_prefix_zdf" in globals():
+        last["prefix"] = make_vdj_prefix_zdf(info["start"], new_end, info)
+    else:
+        last["prefix"] = "[" + f"{info['start']:.2f}" + "-" + f"{new_end:.2f}" + "] "
+
+    last["source"] = str(last.get("source", "")) + "_last_tail_extend"
+    items[-1] = last
+    return items
+
+
 def build_final_xml_for_preview_and_write(original_xml, old_items, mapped_items):
     """
     Single final XML path used by Preview and Write.
 
-    Gap Extender is applied exactly once here, after Smart/Hard mapping is done,
-    before XML rebuild. This works for both modes because the mode-specific
-    rebuild happens after this point.
+    Final passes:
+    1. Gap Extender, if enabled.
+    2. Last lyric tail extension, default +3 seconds.
     """
     final_items = [dict(x) for x in (mapped_items or [])]
     final_items = apply_gap_extender_if_enabled(final_items)
+    final_items = extend_last_lyric_final_pass(final_items, STATE.get("last_lyric_extension", 3.0))
     return rebuild_xml_with_cloned_prefixes(original_xml, old_items, final_items)
-
 
 
 def write_lyrics_to_db(lid_hex, new_xml):
@@ -1445,7 +1492,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v70ialrcat-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v71ialle-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1822,7 +1869,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V7.0-IA-LRCLIB-ARTIST-TITLE", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V7.1-IA-LRCLIB-LAST-END-FIX", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1916,7 +1963,7 @@ def lrclib_results():
 {msg}
 <div class="card">
 <p>No LRCLIB result found for this artist/title.</p>
-<a class="button secondary" href="/">Back</a>
+<a class="button secondary" href="/corrected">Back to corrected lyrics</a>
 </div>
 """)
 
@@ -1951,9 +1998,13 @@ def lrclib_results():
 <div class="card">
 <h2>Choose LRCLIB artist/title result</h2>
 <form method="post">
-{items}
 <input type="submit" value="Use selected LRCLIB lyrics in corrected text box">
-<a class="button secondary" href="/">Back</a>
+<a class="button secondary" href="/corrected">Back to corrected lyrics</a>
+<br><br>
+{items}
+<br>
+<input type="submit" value="Use selected LRCLIB lyrics in corrected text box">
+<a class="button secondary" href="/corrected">Back to corrected lyrics</a>
 </form>
 </div>
 """)
@@ -2179,7 +2230,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied once in the final XML path if enabled. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied once in the final XML path if enabled. The last lyric is extended by 3 seconds. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
 </div>
 
 <div class="card">
