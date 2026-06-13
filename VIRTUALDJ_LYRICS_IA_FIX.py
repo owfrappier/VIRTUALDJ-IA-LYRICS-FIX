@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V7.1-IA-LRCLIB-LAST-END-FIX
+VIRTUALDJ LYRICS IA FIX - V7.2-IA-UI-COSMETIC-FIX
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_1_ia_lrclib_last_end_fix.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_2_ia_ui_cosmetic_fix.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -98,7 +98,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V7.1-IA-LRCLIB-LAST-END-FIX\n"
+            "VIRTUALDJ LYRICS IA FIX V7.2-IA-UI-COSMETIC-FIX\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -537,7 +537,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V7.1-IA-LRCLIB-LAST-END-FIX simple rule:
+            # V7.2-IA-UI-COSMETIC-FIX simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -639,13 +639,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V7.1-IA-LRCLIB-LAST-END-FIX.
+    Hard experimental lyrics distribution V7.2-IA-UI-COSMETIC-FIX.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V7.1-IA-LRCLIB-LAST-END-FIX distributes corrected WORDS across screen blocks proportionally to the
+    V7.2-IA-UI-COSMETIC-FIX distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -740,7 +740,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V7.1-IA-LRCLIB-LAST-END-FIX:
+    V7.2-IA-UI-COSMETIC-FIX:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -794,7 +794,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V7.1-IA-LRCLIB-LAST-END-FIX.
+    Works on chunks, not raw words, in V7.2-IA-UI-COSMETIC-FIX.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -815,7 +815,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V7.1-IA-LRCLIB-LAST-END-FIX. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V7.2-IA-UI-COSMETIC-FIX. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -962,7 +962,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V7.1-IA-LRCLIB-LAST-END-FIX.
+    Hard experimental lyrics mode V7.2-IA-UI-COSMETIC-FIX.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1107,7 +1107,7 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V7.1-IA-LRCLIB-LAST-END-FIX fix:
+    V7.2-IA-UI-COSMETIC-FIX fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1492,7 +1492,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v71ialle-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v72iauic-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1851,6 +1851,15 @@ def index():
     if request.method == "POST":
         rough = request.form.get("rough_text", "")
         close_before_read = request.form.get("close_before_read") == "on"
+
+        if request.form.get("action") == "clear":
+            STATE["rough_text"] = ""
+            STATE["results"] = []
+            STATE["lrclib_results"] = []
+            STATE["lrclib_clean_text"] = ""
+            STATE["message"] = "Rough lyrics field cleared."
+            return redirect(url_for("index"))
+
         STATE["rough_text"] = rough
 
         try:
@@ -1869,7 +1878,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V7.1-IA-LRCLIB-LAST-END-FIX", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V7.2-IA-UI-COSMETIC-FIX", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -1879,6 +1888,7 @@ def index():
 <label><input type="checkbox" name="close_before_read" checked> Close VirtualDJ before reading extra.db</label>
 <br><br>
 <input type="submit" value="Search lyrics entries">
+<button class="button secondary" type="submit" name="action" value="clear">Clear field</button>
 <a class="button secondary" href="/select-db">Change database</a>
 </form>
 </div>
@@ -2033,7 +2043,11 @@ def results():
     return page("Choose lyrics entry", f"""
 <div class="card">
 <form method="post">
+<input type="submit" value="Use selected entry">
+<a class="button secondary" href="/">Back</a>
+<br><br>
 {items}
+<br>
 <input type="submit" value="Use selected entry">
 <a class="button secondary" href="/">Back</a>
 </form>
@@ -2050,6 +2064,13 @@ def corrected():
     if request.method == "POST":
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
+
+        if request.form.get("action") == "clear":
+            STATE["lrclib_clean_text"] = ""
+            STATE["lrclib_artist"] = ""
+            STATE["lrclib_title"] = ""
+            STATE["message"] = "Corrected lyrics fields cleared."
+            return redirect(url_for("corrected"))
 
         if request.form.get("action") == "lrclib":
             artist = request.form.get("lrclib_artist", "").strip()
@@ -2116,6 +2137,7 @@ def corrected():
 <input type="text" name="lrclib_title" value="{STATE.get("lrclib_title", "")}">
 <br><br>
 <button class="button secondary" type="submit" name="action" value="lrclib">Search LRCLIB by artist/title</button>
+<button class="button secondary" type="submit" name="action" value="clear">Clear fields</button>
 </div>
 <textarea name="clean_text">{STATE.get("lrclib_clean_text", "")}</textarea>
 <br><br>
@@ -2207,7 +2229,7 @@ def preview():
 
     count_html = "".join(f"<li>{k}: {v}</li>" for k, v in sorted(counts.items()))
     rows = ""
-    for i, item in enumerate(mapped[:250], 1):
+    for i, item in enumerate(mapped, 1):
         old_display = "" if item["old_index"] is None else str(item["old_index"] + 1)
         rows += f"""
 <tr>
