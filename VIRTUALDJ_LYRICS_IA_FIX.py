@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-VIRTUALDJ LYRICS IA FIX - V7.2-IA-UI-COSMETIC-FIX
+VIRTUALDJ LYRICS IA FIX - V7.4-IA-AUTO-MANUAL-WORKFLOW
 
 Clean cross-platform local web app for fixing VirtualDJ synced lyrics.
 
@@ -24,7 +24,7 @@ Requirements:
     pip install flask
 
 Run:
-    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_2_ia_ui_cosmetic_fix.py
+    python3 VIRTUALDJ_LYRICS_AI_FIX_v7_4_ia_auto_manual_workflow.py
 
 Open manually:
     http://127.0.0.1:5055
@@ -98,7 +98,7 @@ def log(msg=""):
 def reset_log():
     try:
         LOG.write_text(
-            "VIRTUALDJ LYRICS IA FIX V7.2-IA-UI-COSMETIC-FIX\n"
+            "VIRTUALDJ LYRICS IA FIX V7.4-IA-AUTO-MANUAL-WORKFLOW\n"
             f"Start: {datetime.now()}\n"
             + "-" * 70 + "\n",
             encoding="utf-8",
@@ -537,7 +537,7 @@ def map_new_words_to_original_prefixes(old_items, new_words):
                     })
 
         elif tag == "insert":
-            # V7.2-IA-UI-COSMETIC-FIX simple rule:
+            # V7.4-IA-AUTO-MANUAL-WORKFLOW simple rule:
             # Added words stay on the same screen as the nearest similar/matched word.
             #
             # If words are inserted BEFORE an existing matched word, attach all of them
@@ -562,6 +562,64 @@ def map_new_words_to_original_prefixes(old_items, new_words):
 
         elif tag == "delete":
             continue
+
+    return mapped
+
+
+
+
+def map_existing_vdj_items_for_manual_editor(old_items):
+    """
+    V7.4 direct manual correction mode.
+
+    No pasted corrected text required.
+    It opens the existing VirtualDJ lyric words directly in the Manual Editor.
+    The user edits text and optionally timestamps, then previews/writes.
+    """
+    mapped = []
+    for i, item in enumerate(old_items or []):
+        mapped.append({
+            "prefix": item.get("prefix", ""),
+            "word": item.get("word", ""),
+            "source": "manual_from_vdj",
+            "old_index": i,
+            "new_index": i,
+            "corrected_line_id": None,
+        })
+    return mapped
+
+
+def map_manual_text_to_original_prefixes(old_items, clean_text):
+    """
+    V7.3 Manual text mode.
+
+    Direct copy mode:
+    - take corrected words exactly in pasted order;
+    - assign them sequentially to existing VirtualDJ timestamp prefixes;
+    - do not run Smart matching;
+    - do not run Hard chunk/anchor analysis.
+    """
+    new_words, line_ids = words_and_line_ids_from_text(clean_text)
+
+    if not old_items or not new_words:
+        return []
+
+    mapped = []
+
+    def prefix_at_old_index(i):
+        i = max(0, min(i, len(old_items) - 1))
+        return old_items[i]["prefix"]
+
+    for j, word in enumerate(new_words):
+        oi = min(j, len(old_items) - 1)
+        mapped.append({
+            "prefix": prefix_at_old_index(oi),
+            "word": word,
+            "source": "manual_direct_text",
+            "old_index": oi,
+            "new_index": j,
+            "corrected_line_id": line_ids[j] if j < len(line_ids) else None,
+        })
 
     return mapped
 
@@ -639,13 +697,13 @@ def corrected_lines_as_word_groups(clean_text):
 
 def distribute_words_to_screen_blocks_by_original_weight(corrected_words, screen_blocks):
     """
-    Hard experimental lyrics distribution V7.2-IA-UI-COSMETIC-FIX.
+    Hard experimental lyrics distribution V7.4-IA-AUTO-MANUAL-WORKFLOW.
 
     Previous V4.7 distributed corrected LINES across VirtualDJ screen blocks.
     That could create empty screens when VirtualDJ had more screens than the
     corrected pasted text had lines.
 
-    V7.2-IA-UI-COSMETIC-FIX distributes corrected WORDS across screen blocks proportionally to the
+    V7.4-IA-AUTO-MANUAL-WORKFLOW distributes corrected WORDS across screen blocks proportionally to the
     number of original timestamped words in each screen block.
 
     Guarantees:
@@ -740,7 +798,7 @@ def normalized_join_word(word):
 
 def make_safe_difficult_chunks(words):
     """
-    V7.2-IA-UI-COSMETIC-FIX:
+    V7.4-IA-AUTO-MANUAL-WORKFLOW:
     In hard experimental mode, do not write very small connector words alone.
 
     Some languages, especially Corsican, contain many short words:
@@ -794,7 +852,7 @@ def find_exact_monotonic_anchors_for_difficult_mode(old_words, new_chunks):
     """
     Find exact monotonic anchors using SequenceMatcher equal blocks.
 
-    Works on chunks, not raw words, in V7.2-IA-UI-COSMETIC-FIX.
+    Works on chunks, not raw words, in V7.4-IA-AUTO-MANUAL-WORKFLOW.
     """
     old_norm = [norm_word(w) for w in old_words]
     new_norm = [norm_word(w) for w in new_chunks]
@@ -815,7 +873,7 @@ def add_safe_fuzzy_anchors(old_words, new_chunks, existing_anchors):
     """
     Add fuzzy anchors only inside gaps between exact anchors.
 
-    Works on chunks in V7.2-IA-UI-COSMETIC-FIX. For multi-word chunks, the normalized chunk may not
+    Works on chunks in V7.4-IA-AUTO-MANUAL-WORKFLOW. For multi-word chunks, the normalized chunk may not
     match exactly, so fuzzy anchors are conservative.
     """
     anchors = list(existing_anchors)
@@ -962,7 +1020,7 @@ def hard_second_pass_smart_line_realign(hard_mapped, old_items, clean_text, max_
 
 def map_corrected_text_by_screen_blocks(original_xml, old_items, clean_text):
     """
-    Hard experimental lyrics mode V7.2-IA-UI-COSMETIC-FIX.
+    Hard experimental lyrics mode V7.4-IA-AUTO-MANUAL-WORKFLOW.
 
     Hybrid fallback for very distorted lyrics:
     - do not reuse internal clear-screen separators;
@@ -1107,7 +1165,7 @@ def rebuild_xml_screen_mode_no_empty_screens(original_xml, old_items, mapped_ite
     """
     Rebuild XML for Difficult Lyrics mode.
 
-    V7.2-IA-UI-COSMETIC-FIX fix:
+    V7.4-IA-AUTO-MANUAL-WORKFLOW fix:
     In hard experimental mode, do NOT reuse original internal separator lines at all.
 
     Reason:
@@ -1492,7 +1550,7 @@ def write_lyrics_to_db(lid_hex, new_xml):
         raise RuntimeError("No extra.db path selected.")
 
     backup = db.with_name(
-        f"extra.backup-before-lyrics-ai-fix-v72iauic-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+        f"extra.backup-before-lyrics-ai-fix-v74iaamw-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     )
     shutil.copy2(db, backup)
 
@@ -1878,7 +1936,7 @@ def index():
             STATE["message"] = f"Error: {e}"
 
     msg = f'<div class="msg">{STATE["message"]}</div>' if STATE.get("message") else ""
-    return page("VIRTUALDJ LYRICS IA FIX V7.2-IA-UI-COSMETIC-FIX", f"""
+    return page("VIRTUALDJ LYRICS IA FIX V7.4-IA-AUTO-MANUAL-WORKFLOW", f"""
 {msg}
 <div class="card">
 <form method="post">
@@ -2065,6 +2123,15 @@ def corrected():
         clean = request.form.get("clean_text", "")
         alignment_mode = request.form.get("alignment_mode", "smart")
 
+        if request.form.get("action") == "manual_direct":
+            old_items = extract_timed_lines_from_vdj_xml(selected["xml"])
+            STATE["old_items"] = old_items
+            STATE["new_words"] = [x.get("word", "") for x in old_items]
+            STATE["mapped_items"] = map_existing_vdj_items_for_manual_editor(old_items)
+            STATE["alignment_mode"] = "manual_direct"
+            STATE["message"] = "Manual correction mode loaded from selected VirtualDJ lyrics."
+            return redirect(url_for("manual_editor"))
+
         if request.form.get("action") == "clear":
             STATE["lrclib_clean_text"] = ""
             STATE["lrclib_artist"] = ""
@@ -2128,6 +2195,15 @@ def corrected():
 <p class="small">If LRCLIB was used, this box is prefilled with the selected LRCLIB plain lyrics.</p>
 <form method="post">
 <div class="card" style="box-shadow:none; border:1px solid #eee;">
+<h3>Correction method</h3>
+<p class="small">
+Use Auto correction for LRCLIB/pasted corrected lyrics with Smart or Hard alignment.
+Use Manual correction to directly edit the selected VirtualDJ lyrics line by line.
+</p>
+<button class="button secondary" type="submit" name="action" value="manual_direct">Manual correction from selected VirtualDJ lyrics</button>
+</div>
+
+<div class="card" style="box-shadow:none; border:1px solid #eee;">
 <h3>Find corrected lyrics on LRCLIB</h3>
 <p class="small">LRCLIB search works best with artist and title.</p>
 <label>Artist</label>
@@ -2141,19 +2217,20 @@ def corrected():
 </div>
 <textarea name="clean_text">{STATE.get("lrclib_clean_text", "")}</textarea>
 <br><br>
-<h3>Alignment mode</h3>
+<h3>Auto correction alignment mode</h3>
 <label>
 <input type="radio" name="alignment_mode" value="smart" checked>
-Smart mode — recommended for most songs
+Smart mode — recommended auto mode
 </label>
 <br>
 <label>
 <input type="radio" name="alignment_mode" value="screen">
-Hard mode — V5.6 engine + safe line pass
+Hard mode — difficult IA recognition / rare languages
 </label>
+
 <p class="small">
-Hard mode preserves the V5.6 robust engine, then applies a safe local line pass only for zero-duration repairs. No global Smart clamp.
-(for example Corsican or heavily distorted IA recognition).
+Auto correction uses pasted/LRCLIB corrected text, then Smart or Hard alignment.
+Manual correction opens the selected VirtualDJ lyrics directly in the Manual Editor, without requiring pasted corrected text.
 </p>
 <br>
 <h3>Final visual gap extender</h3>
@@ -2252,7 +2329,7 @@ Original timestamped words: <strong>{len(old_items)}</strong><br>
 Corrected words: <strong>{len(new_words)}</strong><br>
 Written lines: <strong>{len(mapped)}</strong></p>
 <ul>{count_html}</ul>
-<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied once in the final XML path if enabled. The last lyric is extended by 3 seconds. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass.</p>
+<p class="small">No timestamp format is generated. Zero-duration chunks are repaired locally. The final XML preview below is the exact database output. Gap Extender is applied once in the final XML path if enabled. The last lyric is extended by 3 seconds. Gap Extender is applied here if enabled. Smart mode keeps added words near matched words. Hard mode keeps the V5.6 robust engine and adds only a safe local line pass. Manual correction can be opened directly from selected VirtualDJ lyrics, or after Smart/Hard preview.</p>
 </div>
 
 <div class="card">
@@ -2308,6 +2385,7 @@ def manual_editor():
                 end = start
 
             item["prefix"] = manual_editor_make_prefix(start, end, item.get("prefix", ""))
+            item["word"] = request.form.get(f"word_{i}", item.get("word", "")).strip()
             item["source"] = str(item.get("source", "")) + "_manual_edit"
 
         STATE["mapped_items"] = edited
@@ -2353,7 +2431,7 @@ def manual_editor():
 <td>{gap_badge}</td>
 <td>{old_display}</td>
 <td>{source_html}</td>
-<td>{word_html}</td>
+<td><input type="text" name="word_{i}" value="{word_html}" style="width:100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;"></td>
 </tr>
 """
 
@@ -2369,10 +2447,10 @@ def manual_editor():
     return page("Manual visual editor", f"""
 {msg}
 <div class="card">
-<h2>Manual visual timestamp editor</h2>
+<h2>Manual visual text/timestamp editor</h2>
 <p class="small">
-Approximate visual simulation. VirtualDJ has its own layout engine.
-Edit start/end manually for final corrections, then apply and check the final XML preview.
+Approximate visual simulation. VirtualDJ has its own layout engine. This editor can be used directly, or after Smart/Hard preview.
+Edit start/end and text manually for final corrections, then apply and check the final XML preview.
 </p>
 <a class="button secondary" href="/preview">Back to preview</a>
 </div>
@@ -2393,7 +2471,7 @@ Edit start/end manually for final corrections, then apply and check the final XM
 <th>Gap to next</th>
 <th>old#</th>
 <th>source</th>
-<th>text</th>
+<th>text editable</th>
 </tr>
 {rows}
 </table>
